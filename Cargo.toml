@@ -1,0 +1,14 @@
+[package]
+name = "batmd"
+version = "0.1.0"
+edition = "2024"
+description = "A terminal markdown viewer/editor - bat meets vim"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+syntect = "5"
+pulldown-cmark = "0.12"
+notify = "7"
+clap = { version = "4", features = ["derive"] }
+unicode-width = "0.2"

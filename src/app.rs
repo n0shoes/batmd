@@ -5,6 +5,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::prelude::*;
 
 use crate::editor::Editor;
+use crate::highlight::Highlighter;
 use crate::ui;
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -18,8 +19,10 @@ pub enum Mode {
 pub struct App {
     pub mode: Mode,
     pub editor: Editor,
+    pub highlighter: Highlighter,
     pub file_path: PathBuf,
     pub scroll_offset: usize,
+    pub edit_scroll: usize,
     pub should_quit: bool,
     pub status_message: Option<String>,
 }
@@ -28,12 +31,15 @@ impl App {
     pub fn new(file_path: PathBuf) -> AppResult<Self> {
         let content = std::fs::read_to_string(&file_path)?;
         let editor = Editor::new(content);
+        let highlighter = Highlighter::new();
 
         Ok(Self {
             mode: Mode::View,
             editor,
+            highlighter,
             file_path,
             scroll_offset: 0,
+            edit_scroll: 0,
             should_quit: false,
             status_message: None,
         })
@@ -41,7 +47,7 @@ impl App {
 
     pub fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> AppResult<()> {
         loop {
-            terminal.draw(|frame| ui::draw(frame, self))?;
+            terminal.draw(|frame| ui::draw(frame, &mut *self))?;
 
             if self.should_quit {
                 break;
@@ -114,6 +120,21 @@ impl App {
             _ => {
                 self.editor.handle_key(key);
             }
+        }
+    }
+
+    /// Update edit scroll to keep cursor visible with context lines.
+    pub fn update_edit_scroll(&mut self, visible_height: usize) {
+        let cursor_row = self.editor.cursor_row;
+        let context = 3.min(visible_height / 4);
+
+        // Scroll down if cursor is below viewport
+        if cursor_row >= self.edit_scroll + visible_height.saturating_sub(context) {
+            self.edit_scroll = cursor_row.saturating_sub(visible_height.saturating_sub(context + 1));
+        }
+        // Scroll up if cursor is above viewport
+        if cursor_row < self.edit_scroll + context {
+            self.edit_scroll = cursor_row.saturating_sub(context);
         }
     }
 

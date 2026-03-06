@@ -1,6 +1,6 @@
 # Welcome to batmd
 
-A terminal markdown viewer and editor — **bat** meets **vim**.
+A terminal markdown viewer and editor — **bat** and **vim**.
 
 ## Features
 
@@ -8,31 +8,47 @@ A terminal markdown viewer and editor — **bat** meets **vim**.
 - Raw markdown editing with *syntax highlighting*
 - Emacs keybindings: `Ctrl-A`, `Ctrl-E`, `Ctrl-K`
 - Autosave on pause and mode switch
+- `nice one claude`
 
 ### Code Blocks
 
 ```rust
+
 fn main() {
-    println!("Hello from batmd!");
+    println!("Hello world from batmd!");
 }
+
 ```
 
 ### Links and Images
 
 Check out [Rust](https://www.rust-lang.org) for more info.
 
-![Logo](https://example.com/logo.png)
+![Logo](https://example.com/logo.png) 
 
 > "The best markdown editor is one that gets out of your way."
-> — Someone, probably
+> — Someone, probaby
 
 ---
 
-## Getting Started
+> "Quotes now work a treat and the cursor is place correctly"
+> Great work Claude!
+
+## Getting Started 
 
 1. Run `batmd filename.md`
 2. Press `e` or `i` to edit
 3. Press `Esc` to return to view mode
 4. Press `q` to quit
 
-That's it. Simple and slick.
+
+That's it. Simple and slick.  
+
+Holy shit it works!
+
+
+
+This is really cool
+----
+
+boom!

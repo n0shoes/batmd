@@ -1,10 +1,11 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use unicode_width::UnicodeWidthChar;
 
 use crate::app::{App, Mode};
 use crate::renderer;
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -63,18 +64,15 @@ fn draw_view(frame: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn draw_edit(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_edit(frame: &mut Frame, app: &mut App, area: Rect) {
     let visible_height = area.height as usize;
     let cursor_row = app.editor.cursor_row;
 
-    // Calculate scroll to keep cursor visible
-    let scroll = if cursor_row >= visible_height {
-        cursor_row - visible_height + 1
-    } else {
-        0
-    };
+    // Update scroll to keep cursor visible
+    app.update_edit_scroll(visible_height);
+    let scroll = app.edit_scroll;
 
-    // Build lines with line numbers (raw markdown, syntax-highlighted later)
+    // Build lines with line numbers and syntax highlighting
     let mut lines: Vec<Line<'static>> = Vec::new();
     for (i, line) in app.editor.lines.iter().enumerate() {
         let line_num = format!(" {:>3} │ ", i + 1);
@@ -84,16 +82,17 @@ fn draw_edit(frame: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(Color::DarkGray)
         };
 
-        let content_style = if i == cursor_row {
-            Style::default().fg(Color::White).bg(Color::Rgb(35, 35, 50))
-        } else {
-            Style::default().fg(Color::Rgb(200, 200, 200))
-        };
+        // Syntax-highlighted content spans
+        let mut content_spans = app.highlighter.highlight_line(line);
 
-        lines.push(Line::from(vec![
-            Span::styled(line_num, num_style),
-            Span::styled(line.clone(), content_style),
-        ]));
+        // Dim highlight on current line (just brighten the line number, leave syntax colors)
+        if content_spans.is_empty() {
+            content_spans.push(Span::raw(""));
+        }
+
+        let mut all_spans = vec![Span::styled(line_num, num_style)];
+        all_spans.extend(content_spans);
+        lines.push(Line::from(all_spans));
     }
 
     let text = ratatui::text::Text::from(lines);
@@ -107,9 +106,14 @@ fn draw_edit(frame: &mut Frame, app: &App, area: Rect) {
 
     frame.render_widget(paragraph, area);
 
-    // Position cursor
-    let gutter_width = 7; // " NNN │ "
-    let cursor_x = area.x + gutter_width + app.editor.cursor_col as u16;
+    // Position cursor — compute visual width of chars before cursor
+    let gutter_width: u16 = 7; // " NNN │ "
+    let visual_col: u16 = app.editor.current_line()
+        .chars()
+        .take(app.editor.cursor_col)
+        .map(|c| UnicodeWidthChar::width(c).unwrap_or(1) as u16)
+        .sum();
+    let cursor_x = area.x + gutter_width + visual_col;
     let cursor_y = area.y + (cursor_row - scroll) as u16;
     if cursor_y < area.y + area.height {
         frame.set_cursor_position((cursor_x, cursor_y));

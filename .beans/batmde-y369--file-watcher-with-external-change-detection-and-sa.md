@@ -1,10 +1,11 @@
 ---
 # batmde-y369
 title: File watcher with external change detection and safe save
-status: in-progress
+status: completed
 type: task
+priority: normal
 created_at: 2026-03-08T03:12:24Z
-updated_at: 2026-03-08T03:12:24Z
+updated_at: 2026-03-08T03:54:22Z
 parent: batmde-wue0
 ---
 

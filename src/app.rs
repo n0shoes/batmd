@@ -133,6 +133,13 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('e') | KeyCode::Char('i') => {
+                // Approximate source line from view scroll position
+                if self.rendered_line_count > 0 {
+                    let ratio = self.scroll_offset as f64 / self.rendered_line_count as f64;
+                    let target_row = (ratio * self.editor.line_count() as f64) as usize;
+                    self.editor.cursor_row = target_row.min(self.editor.line_count().saturating_sub(1));
+                    self.editor.cursor_col = 0;
+                }
                 self.mode = Mode::Edit;
                 self.status_message = Some("-- EDIT --".into());
             }

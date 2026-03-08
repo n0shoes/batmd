@@ -263,6 +263,14 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         ));
     }
 
+    // Read-only indicator
+    if app.read_only {
+        spans.push(Span::styled(
+            " [RO] ",
+            Style::default().fg(Color::Red).bg(Color::Rgb(40, 40, 55)),
+        ));
+    }
+
     // External change indicator
     if app.file_changed_externally && app.mode != Mode::Conflict {
         spans.push(Span::styled(

@@ -34,6 +34,7 @@ pub struct App {
     pub view_height: usize,
     pub file_changed_externally: bool,
     pub has_unsaved_edits: bool,
+    pub read_only: bool,
     last_known_modified: Option<SystemTime>,
     watcher: Option<FileWatcher>,
     // Search state
@@ -49,7 +50,9 @@ impl App {
         let content = std::fs::read_to_string(&file_path)?;
         let editor = Editor::new(content);
         let highlighter = Highlighter::new();
-        let modified = std::fs::metadata(&file_path)?.modified().ok();
+        let meta = std::fs::metadata(&file_path)?;
+        let modified = meta.modified().ok();
+        let read_only = meta.permissions().readonly();
 
         let watcher = FileWatcher::new(&file_path).ok();
 
@@ -66,6 +69,7 @@ impl App {
             view_height: 0,
             file_changed_externally: false,
             has_unsaved_edits: false,
+            read_only,
             last_known_modified: modified,
             watcher,
             search_query: String::new(),
@@ -152,6 +156,10 @@ impl App {
             }
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('e') | KeyCode::Char('i') => {
+                if self.read_only {
+                    self.status_message = Some("Read-only file".into());
+                    return;
+                }
                 // Approximate source line from view scroll position
                 if self.rendered_line_count > 0 {
                     let ratio = self.scroll_offset as f64 / self.rendered_line_count as f64;

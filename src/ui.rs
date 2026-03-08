@@ -1,5 +1,5 @@
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
 use unicode_width::UnicodeWidthChar;
 
 use crate::app::{App, Mode};
@@ -62,6 +62,7 @@ fn draw_view(frame: &mut Frame, app: &mut App, area: Rect) {
     let text = ratatui::text::Text::from(rendered);
 
     let paragraph = Paragraph::new(text)
+        .wrap(Wrap { trim: false })
         .scroll((app.scroll_offset as u16, 0))
         .block(
             Block::default()

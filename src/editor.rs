@@ -53,56 +53,70 @@ impl Editor {
             .unwrap_or(self.lines[row].len())
     }
 
-    pub fn handle_key(&mut self, key: KeyEvent) {
+    /// Handle a key event. Returns true if the buffer content was modified.
+    pub fn handle_key(&mut self, key: KeyEvent) -> bool {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
-            match key.code {
-                // Ctrl-A: move to beginning of line
+            return match key.code {
                 KeyCode::Char('a') => {
                     self.cursor_col = 0;
+                    false
                 }
-                // Ctrl-E: move to end of line
                 KeyCode::Char('e') => {
                     self.cursor_col = self.current_line_char_len();
+                    false
                 }
-                // Ctrl-K: kill from cursor to end of line
                 KeyCode::Char('k') => {
                     let row = self.cursor_row;
                     let col = self.cursor_col;
                     if col < self.line_char_len(row) {
                         let byte_idx = self.char_to_byte(row, col);
                         self.lines[row].truncate(byte_idx);
+                        true
                     } else if row + 1 < self.lines.len() {
-                        // Join with next line
                         let next = self.lines.remove(row + 1);
                         self.lines[row].push_str(&next);
+                        true
+                    } else {
+                        false
                     }
                 }
-                // Ctrl-D: delete character under cursor
                 KeyCode::Char('d') => {
-                    self.delete_forward();
+                    self.delete_forward()
                 }
-                _ => {}
-            }
-            return;
+                // Ctrl-T: jump to top of document
+                KeyCode::Char('t') => {
+                    self.cursor_row = 0;
+                    self.cursor_col = 0;
+                    false
+                }
+                // Ctrl-B: jump to bottom of document
+                KeyCode::Char('b') => {
+                    self.cursor_row = self.lines.len().saturating_sub(1);
+                    self.cursor_col = self.current_line_char_len();
+                    false
+                }
+                _ => false,
+            };
         }
 
         match key.code {
-            KeyCode::Char(c) => self.insert_char(c),
+            KeyCode::Char(c) => { self.insert_char(c); true }
             KeyCode::Backspace => self.backspace(),
             KeyCode::Delete => self.delete_forward(),
-            KeyCode::Enter => self.insert_newline(),
-            KeyCode::Left => self.move_left(),
-            KeyCode::Right => self.move_right(),
-            KeyCode::Up => self.move_up(),
-            KeyCode::Down => self.move_down(),
-            KeyCode::Home => self.cursor_col = 0,
-            KeyCode::End => self.cursor_col = self.current_line_char_len(),
+            KeyCode::Enter => { self.insert_newline(); true }
+            KeyCode::Left => { self.move_left(); false }
+            KeyCode::Right => { self.move_right(); false }
+            KeyCode::Up => { self.move_up(); false }
+            KeyCode::Down => { self.move_down(); false }
+            KeyCode::Home => { self.cursor_col = 0; false }
+            KeyCode::End => { self.cursor_col = self.current_line_char_len(); false }
             KeyCode::Tab => {
                 for _ in 0..4 {
                     self.insert_char(' ');
                 }
+                true
             }
-            _ => {}
+            _ => false,
         }
     }
 
@@ -123,23 +137,26 @@ impl Editor {
         self.lines.insert(self.cursor_row, remainder);
     }
 
-    fn backspace(&mut self) {
+    fn backspace(&mut self) -> bool {
         if self.cursor_col > 0 {
             self.cursor_col -= 1;
             let byte_idx = self.char_to_byte(self.cursor_row, self.cursor_col);
-            // Find the byte range of the character to remove
             let ch = self.lines[self.cursor_row][byte_idx..].chars().next().unwrap();
             let end = byte_idx + ch.len_utf8();
             self.lines[self.cursor_row].replace_range(byte_idx..end, "");
+            true
         } else if self.cursor_row > 0 {
             let current_line = self.lines.remove(self.cursor_row);
             self.cursor_row -= 1;
             self.cursor_col = self.line_char_len(self.cursor_row);
             self.lines[self.cursor_row].push_str(&current_line);
+            true
+        } else {
+            false
         }
     }
 
-    fn delete_forward(&mut self) {
+    fn delete_forward(&mut self) -> bool {
         let row = self.cursor_row;
         let col = self.cursor_col;
         if col < self.line_char_len(row) {
@@ -147,9 +164,13 @@ impl Editor {
             let ch = self.lines[row][byte_idx..].chars().next().unwrap();
             let end = byte_idx + ch.len_utf8();
             self.lines[row].replace_range(byte_idx..end, "");
+            true
         } else if row + 1 < self.lines.len() {
             let next = self.lines.remove(row + 1);
             self.lines[row].push_str(&next);
+            true
+        } else {
+            false
         }
     }
 

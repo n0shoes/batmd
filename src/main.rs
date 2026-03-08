@@ -3,6 +3,7 @@ mod editor;
 mod highlight;
 mod renderer;
 mod ui;
+mod watcher;
 
 use std::io;
 use std::path::PathBuf;

@@ -1,10 +1,11 @@
 ---
 # batmde-as6t
 title: Polish edit mode with syntect highlighting and scroll tracking
-status: in-progress
+status: completed
 type: task
+priority: normal
 created_at: 2026-03-06T07:57:37Z
-updated_at: 2026-03-06T07:57:37Z
+updated_at: 2026-03-06T08:27:16Z
 parent: batmde-r03l
 ---
 

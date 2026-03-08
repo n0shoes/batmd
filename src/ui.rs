@@ -28,16 +28,20 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     match app.mode {
         Mode::View => draw_view(frame, app, content_area),
-        Mode::Edit => draw_edit(frame, app, content_area),
+        Mode::Edit | Mode::Conflict => draw_edit(frame, app, content_area),
     }
 
     draw_status_bar(frame, app, status_area);
 }
 
-fn draw_view(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_view(frame: &mut Frame, app: &mut App, area: Rect) {
     let content = app.editor.content();
     let rendered = renderer::render_markdown(&content);
     let total_lines = rendered.len();
+
+    // Store for scroll calculations
+    app.rendered_line_count = total_lines;
+    app.view_height = area.height as usize;
 
     let text = ratatui::text::Text::from(rendered);
 
@@ -121,20 +125,21 @@ fn draw_edit(frame: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
-    let mode_str = match app.mode {
-        Mode::View => " VIEW ",
-        Mode::Edit => " EDIT ",
-    };
+    let bar_bg = Style::default().bg(Color::Rgb(40, 40, 55));
 
-    let mode_style = match app.mode {
-        Mode::View => Style::default()
+    let (mode_str, mode_style) = match app.mode {
+        Mode::View => (" VIEW ", Style::default()
             .fg(Color::Black)
             .bg(Color::Cyan)
-            .add_modifier(Modifier::BOLD),
-        Mode::Edit => Style::default()
+            .add_modifier(Modifier::BOLD)),
+        Mode::Edit => (" EDIT ", Style::default()
             .fg(Color::Black)
             .bg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD)),
+        Mode::Conflict => (" CONFLICT ", Style::default()
+            .fg(Color::Black)
+            .bg(Color::Red)
+            .add_modifier(Modifier::BOLD)),
     };
 
     let file_name = app
@@ -144,7 +149,7 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         .unwrap_or_else(|| "unknown".to_string());
 
     let position = match app.mode {
-        Mode::Edit => format!(
+        Mode::Edit | Mode::Conflict => format!(
             " Ln {}, Col {} ",
             app.editor.cursor_row + 1,
             app.editor.cursor_col + 1
@@ -153,35 +158,51 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let help = match app.mode {
-        Mode::View => " q:quit  e/i:edit  j/k:scroll ",
-        Mode::Edit => " Esc:view  C-a:home  C-e:end  C-k:kill ",
+        Mode::View => {
+            if app.file_changed_externally {
+                " R:reload  q:quit  e/i:edit  j/k:scroll "
+            } else {
+                " q:quit  e/i:edit  j/k:scroll  R:reload "
+            }
+        }
+        Mode::Edit => " Esc:view  C-a:home  C-e:end  C-k:kill  C-t:top  C-b:bottom ",
+        Mode::Conflict => " [S]ave yours / [R]eload theirs / [Esc] back to edit ",
     };
 
-    let status = Line::from(vec![
+    let mut spans = vec![
         Span::styled(mode_str, mode_style),
         Span::styled(
             format!(" {} ", file_name),
-            Style::default()
-                .fg(Color::White)
-                .bg(Color::Rgb(40, 40, 55)),
+            Style::default().fg(Color::White).bg(Color::Rgb(40, 40, 55)),
         ),
-        Span::styled(
-            help,
-            Style::default()
-                .fg(Color::DarkGray)
-                .bg(Color::Rgb(40, 40, 55)),
-        ),
-        Span::styled(
-            position,
-            Style::default()
-                .fg(Color::Cyan)
-                .bg(Color::Rgb(40, 40, 55)),
-        ),
-    ]);
+    ];
 
-    let bar = Paragraph::new(status).style(
-        Style::default().bg(Color::Rgb(40, 40, 55)),
-    );
+    // External change indicator
+    if app.file_changed_externally && app.mode != Mode::Conflict {
+        spans.push(Span::styled(
+            " ! CHANGED ",
+            Style::default().fg(Color::Red).bg(Color::Rgb(40, 40, 55)),
+        ));
+    }
 
+    // Unsaved edits indicator
+    if app.has_unsaved_edits {
+        spans.push(Span::styled(
+            " [modified] ",
+            Style::default().fg(Color::Yellow).bg(Color::Rgb(40, 40, 55)),
+        ));
+    }
+
+    spans.push(Span::styled(
+        help,
+        Style::default().fg(Color::DarkGray).bg(Color::Rgb(40, 40, 55)),
+    ));
+    spans.push(Span::styled(
+        position,
+        Style::default().fg(Color::Cyan).bg(Color::Rgb(40, 40, 55)),
+    ));
+
+    let status = Line::from(spans);
+    let bar = Paragraph::new(status).style(bar_bg);
     frame.render_widget(bar, area);
 }

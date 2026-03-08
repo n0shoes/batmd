@@ -17,6 +17,8 @@ pub enum Mode {
     Edit,
     /// File changed externally while user has edits. Prompt to resolve.
     Conflict,
+    /// Typing a search query in view mode.
+    Search,
 }
 
 pub struct App {
@@ -34,6 +36,12 @@ pub struct App {
     pub has_unsaved_edits: bool,
     last_known_modified: Option<SystemTime>,
     watcher: Option<FileWatcher>,
+    // Search state
+    pub search_query: String,
+    pub search_input: String,
+    /// (line_index, byte_start, byte_end) in rendered lines
+    pub search_matches: Vec<(usize, usize, usize)>,
+    pub search_match_idx: Option<usize>,
 }
 
 impl App {
@@ -60,6 +68,10 @@ impl App {
             has_unsaved_edits: false,
             last_known_modified: modified,
             watcher,
+            search_query: String::new(),
+            search_input: String::new(),
+            search_matches: Vec::new(),
+            search_match_idx: None,
         })
     }
 
@@ -119,6 +131,7 @@ impl App {
             Mode::View => self.handle_view_key(key),
             Mode::Edit => self.handle_edit_key(key),
             Mode::Conflict => self.handle_conflict_key(key),
+            Mode::Search => self.handle_search_key(key),
         }
     }
 
@@ -131,6 +144,12 @@ impl App {
             }
         }
         match key.code {
+            KeyCode::Esc => {
+                if !self.search_query.is_empty() {
+                    self.clear_search();
+                    self.status_message = None;
+                }
+            }
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('e') | KeyCode::Char('i') => {
                 // Approximate source line from view scroll position
@@ -141,7 +160,19 @@ impl App {
                     self.editor.cursor_col = 0;
                 }
                 self.mode = Mode::Edit;
+                self.clear_search();
                 self.status_message = Some("-- EDIT --".into());
+            }
+            KeyCode::Char('/') => {
+                self.search_input.clear();
+                self.mode = Mode::Search;
+                self.status_message = Some("/ ".into());
+            }
+            KeyCode::Char('n') => {
+                self.search_next();
+            }
+            KeyCode::Char('N') => {
+                self.search_prev();
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 self.reload();
@@ -252,6 +283,113 @@ impl App {
 
     fn scroll_to_bottom(&mut self) {
         self.scroll_offset = self.max_view_scroll();
+    }
+
+    fn handle_search_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Enter => {
+                self.search_query = self.search_input.clone();
+                self.mode = Mode::View;
+                // Matches will be computed after next render (needs rendered lines)
+                // Trigger a find on current rendered content
+                self.find_matches();
+                if self.search_matches.is_empty() {
+                    self.status_message = Some(format!("Pattern not found: {}", self.search_query));
+                } else {
+                    self.search_next();
+                }
+            }
+            KeyCode::Esc => {
+                self.mode = Mode::View;
+                self.status_message = None;
+            }
+            KeyCode::Backspace => {
+                self.search_input.pop();
+                self.status_message = Some(format!("/ {}", self.search_input));
+            }
+            KeyCode::Char(c) => {
+                self.search_input.push(c);
+                self.status_message = Some(format!("/ {}", self.search_input));
+            }
+            _ => {}
+        }
+    }
+
+    fn find_matches(&mut self) {
+        self.search_matches.clear();
+        self.search_match_idx = None;
+        if self.search_query.is_empty() {
+            return;
+        }
+        let query_lower = self.search_query.to_lowercase();
+        let content = self.editor.content();
+        let rendered = crate::renderer::render_markdown(&content);
+        for (line_idx, line) in rendered.iter().enumerate() {
+            let plain: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
+            let plain_lower = plain.to_lowercase();
+            let mut start = 0;
+            while let Some(pos) = plain_lower[start..].find(&query_lower) {
+                let abs_pos = start + pos;
+                self.search_matches.push((line_idx, abs_pos, abs_pos + query_lower.len()));
+                start = abs_pos + 1;
+            }
+        }
+    }
+
+    fn search_next(&mut self) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+        let idx = match self.search_match_idx {
+            Some(i) => (i + 1) % self.search_matches.len(),
+            None => {
+                // Find first match at or after current scroll position
+                self.search_matches.iter()
+                    .position(|(line, _, _)| *line >= self.scroll_offset)
+                    .unwrap_or(0)
+            }
+        };
+        self.search_match_idx = Some(idx);
+        self.scroll_to_match(idx);
+    }
+
+    fn search_prev(&mut self) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+        let idx = match self.search_match_idx {
+            Some(0) => self.search_matches.len() - 1,
+            Some(i) => i - 1,
+            None => {
+                self.search_matches.iter()
+                    .rposition(|(line, _, _)| *line <= self.scroll_offset)
+                    .unwrap_or(self.search_matches.len() - 1)
+            }
+        };
+        self.search_match_idx = Some(idx);
+        self.scroll_to_match(idx);
+    }
+
+    fn scroll_to_match(&mut self, idx: usize) {
+        let (line, _, _) = self.search_matches[idx];
+        let total = self.search_matches.len();
+        // Center the match in the viewport
+        let half = self.view_height / 2;
+        self.scroll_offset = line.saturating_sub(half);
+        let max = self.max_view_scroll();
+        self.scroll_offset = self.scroll_offset.min(max);
+        self.status_message = Some(format!(
+            "[{}/{}] {}",
+            idx + 1,
+            total,
+            self.search_query,
+        ));
+    }
+
+    pub fn clear_search(&mut self) {
+        self.search_query.clear();
+        self.search_matches.clear();
+        self.search_match_idx = None;
     }
 
     fn save(&mut self) {

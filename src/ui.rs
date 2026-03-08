@@ -27,7 +27,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let content_area = h_chunks[1];
 
     match app.mode {
-        Mode::View => draw_view(frame, app, content_area),
+        Mode::View | Mode::Search => draw_view(frame, app, content_area),
         Mode::Edit | Mode::Conflict => draw_edit(frame, app, content_area),
     }
 
@@ -36,12 +36,28 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
 fn draw_view(frame: &mut Frame, app: &mut App, area: Rect) {
     let content = app.editor.content();
-    let rendered = renderer::render_markdown(&content);
+    let mut rendered = renderer::render_markdown(&content);
     let total_lines = rendered.len();
 
     // Store for scroll calculations
     app.rendered_line_count = total_lines;
     app.view_height = area.height as usize;
+
+    // Highlight search matches
+    if !app.search_query.is_empty() && !app.search_matches.is_empty() {
+        let current_match_idx = app.search_match_idx;
+        for (match_idx, &(line_idx, byte_start, byte_end)) in app.search_matches.iter().enumerate() {
+            if line_idx < rendered.len() {
+                let is_current = current_match_idx == Some(match_idx);
+                rendered[line_idx] = highlight_line_matches(
+                    &rendered[line_idx],
+                    byte_start,
+                    byte_end,
+                    is_current,
+                );
+            }
+        }
+    }
 
     let text = ratatui::text::Text::from(rendered);
 
@@ -124,6 +140,61 @@ fn draw_edit(frame: &mut Frame, app: &mut App, area: Rect) {
     }
 }
 
+/// Highlight a portion of a rendered line by splitting spans at char boundaries.
+/// `char_start` and `char_end` are character offsets into the plain text of the line.
+fn highlight_line_matches(
+    line: &Line<'_>,
+    char_start: usize,
+    char_end: usize,
+    is_current: bool,
+) -> Line<'static> {
+    let highlight_style = if is_current {
+        Style::default().fg(Color::Black).bg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Black).bg(Color::DarkGray)
+    };
+
+    let mut new_spans: Vec<Span<'static>> = Vec::new();
+    let mut offset = 0usize; // character offset across all spans
+
+    for span in &line.spans {
+        let span_text = span.content.as_ref();
+        let span_len = span_text.len();
+        let span_start = offset;
+        let span_end = offset + span_len;
+
+        if span_end <= char_start || span_start >= char_end {
+            // No overlap — keep span as-is
+            new_spans.push(Span::styled(span_text.to_string(), span.style));
+        } else {
+            // Overlap — split the span
+            let hl_start = char_start.saturating_sub(span_start);
+            let hl_end = (char_end - span_start).min(span_len);
+
+            if hl_start > 0 {
+                new_spans.push(Span::styled(
+                    span_text[..hl_start].to_string(),
+                    span.style,
+                ));
+            }
+            new_spans.push(Span::styled(
+                span_text[hl_start..hl_end].to_string(),
+                highlight_style,
+            ));
+            if hl_end < span_len {
+                new_spans.push(Span::styled(
+                    span_text[hl_end..].to_string(),
+                    span.style,
+                ));
+            }
+        }
+
+        offset += span_len;
+    }
+
+    Line::from(new_spans)
+}
+
 fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let bar_bg = Style::default().bg(Color::Rgb(40, 40, 55));
 
@@ -140,6 +211,10 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             .fg(Color::Black)
             .bg(Color::Red)
             .add_modifier(Modifier::BOLD)),
+        Mode::Search => (" SEARCH ", Style::default()
+            .fg(Color::Black)
+            .bg(Color::Green)
+            .add_modifier(Modifier::BOLD)),
     };
 
     let file_name = app
@@ -154,19 +229,22 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             app.editor.cursor_row + 1,
             app.editor.cursor_col + 1
         ),
-        Mode::View => format!(" Line {} ", app.scroll_offset + 1),
+        Mode::View | Mode::Search => format!(" Line {} ", app.scroll_offset + 1),
     };
 
     let help = match app.mode {
         Mode::View => {
-            if app.file_changed_externally {
-                " R:reload  q:quit  e/i:edit  j/k:scroll "
+            if !app.search_query.is_empty() {
+                " /:search  n/N:next/prev  q:quit  e/i:edit  j/k:scroll "
+            } else if app.file_changed_externally {
+                " R:reload  q:quit  e/i:edit  j/k:scroll  /:search "
             } else {
-                " q:quit  e/i:edit  j/k:scroll  R:reload "
+                " q:quit  e/i:edit  j/k:scroll  /:search  R:reload "
             }
         }
         Mode::Edit => " Esc:view  C-a:home  C-e:end  C-k:kill  C-t:top  C-b:bottom ",
         Mode::Conflict => " [S]ave yours / [R]eload theirs / [Esc] back to edit ",
+        Mode::Search => " Enter:find  Esc:cancel ",
     };
 
     let mut spans = vec![
@@ -176,6 +254,14 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(Color::White).bg(Color::Rgb(40, 40, 55)),
         ),
     ];
+
+    // Show status message (search prompt, save confirmation, etc.)
+    if let Some(msg) = &app.status_message {
+        spans.push(Span::styled(
+            format!(" {} ", msg),
+            Style::default().fg(Color::Yellow).bg(Color::Rgb(40, 40, 55)),
+        ));
+    }
 
     // External change indicator
     if app.file_changed_externally && app.mode != Mode::Conflict {

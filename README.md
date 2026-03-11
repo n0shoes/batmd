@@ -11,10 +11,10 @@ Built for working in the CLI with claude code etc.
 - If claude etc updates the markdown file while you're editing you'll be prompted to `save as` or you can `overwright`.
 
 View Mode:  
-![view.png](view.png)
+![view.png](screenshots/view.png)
 
 Edit Mode:    
-![edit.png](edit.png)
+![edit.png](screenshots/edit.png)
 
 
 Built using claude code using Rust and ratatui.

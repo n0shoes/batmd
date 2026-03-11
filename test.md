@@ -1,4 +1,4 @@
-q# Welcome to batmd
+# Welcome to batmd
 
 A terminal markdown viewer and editor — **bat** and **vim**.
 

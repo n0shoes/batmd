@@ -5,6 +5,8 @@ pub struct Editor {
     /// Cursor position as character index (not byte index)
     pub cursor_row: usize,
     pub cursor_col: usize,
+    /// Kill buffer for Ctrl-K/Ctrl-U/Ctrl-Y
+    kill_buffer: String,
 }
 
 impl Editor {
@@ -19,6 +21,7 @@ impl Editor {
             lines,
             cursor_row: 0,
             cursor_col: 0,
+            kill_buffer: String::new(),
         }
     }
 
@@ -70,15 +73,44 @@ impl Editor {
                     let col = self.cursor_col;
                     if col < self.line_char_len(row) {
                         let byte_idx = self.char_to_byte(row, col);
+                        self.kill_buffer = self.lines[row][byte_idx..].to_string();
                         self.lines[row].truncate(byte_idx);
                         true
                     } else if row + 1 < self.lines.len() {
+                        self.kill_buffer = "\n".to_string();
                         let next = self.lines.remove(row + 1);
                         self.lines[row].push_str(&next);
                         true
                     } else {
                         false
                     }
+                }
+                KeyCode::Char('u') => {
+                    let row = self.cursor_row;
+                    let col = self.cursor_col;
+                    if col > 0 {
+                        let byte_idx = self.char_to_byte(row, col);
+                        self.kill_buffer = self.lines[row][..byte_idx].to_string();
+                        self.lines[row] = self.lines[row][byte_idx..].to_string();
+                        self.cursor_col = 0;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                KeyCode::Char('y') => {
+                    if self.kill_buffer.is_empty() {
+                        return false;
+                    }
+                    if self.kill_buffer == "\n" {
+                        self.insert_newline();
+                    } else {
+                        let row = self.cursor_row;
+                        let byte_idx = self.char_to_byte(row, self.cursor_col);
+                        self.lines[row].insert_str(byte_idx, &self.kill_buffer);
+                        self.cursor_col += self.kill_buffer.chars().count();
+                    }
+                    true
                 }
                 KeyCode::Char('d') => {
                     self.delete_forward()

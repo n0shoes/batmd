@@ -120,8 +120,8 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
-        // Only handle key press events (ignore release/repeat for Kitty protocol terminals)
-        if key.kind != KeyEventKind::Press {
+        // Only handle key press/repeat events (ignore release for Kitty protocol terminals)
+        if key.kind == KeyEventKind::Release {
             return;
         }
 

@@ -2,12 +2,29 @@
 
 A terminal markdown viewer and editor — bat meets vim.
 
-View rendered markdown with syntax highlighting, then drop into a raw editor to make changes. Built with Rust using ratatui.
+View rendered markdown with syntax highlighting, then drop into a raw editor to make changes. 
+Built for working in the CLI with claude code etc.
+
+- `batmd plan.md` will drop you into the view mode - designed to look like batcat.
+- Hit the e or i key to enter edit mode and edit the raw markdown.
+- Edits are saved when you return to view mode using the Esc key.
+- If claude etc updates the markdown file while you're editing you'll be prompted to `save as` or you can `overwright`.
+
+View Mode:  
+![view.png](view.png)
+
+Edit Mode:    
+![edit.png](edit.png)
+
+
+Built using claude code using Rust and ratatui.
 
 ## Install
 
 Requires Rust toolchain. Install via [rustup](https://rustup.rs/) if needed.
 
+
+Checkout and build.
 ```bash
 git clone <repo-url>
 cd batmde

@@ -1,4 +1,4 @@
-# Welcome to batmd
+q# Welcome to batmd
 
 A terminal markdown viewer and editor — **bat** and **vim**.
 
@@ -45,21 +45,3 @@ Check out [Rust](https://www.rust-lang.org) for more info.
 That's it. Simple and slick.  
 
 Holy shit it works!
-
-
-
-This is really cool
-----
-
-boom!
-
-external edit  
-
-external edit2  
-
-external edit3    
-external edit 4  
-external edit 5  
-external edit 6  
-
-

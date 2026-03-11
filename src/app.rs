@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::prelude::*;
 
 use crate::editor::Editor;
@@ -120,6 +120,11 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
+        // Only handle key press events (ignore release/repeat for Kitty protocol terminals)
+        if key.kind != KeyEventKind::Press {
+            return;
+        }
+
         // Ctrl-C or Ctrl-Q always quits
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {

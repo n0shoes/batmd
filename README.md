@@ -74,6 +74,8 @@ Opens the file in view mode. If the file doesn't exist, it will be created.
 | `Ctrl-D` | Delete character forward |
 | `Ctrl-T` | Jump to top of document |
 | `Ctrl-B` | Jump to bottom of document |
+| `Ctrl-U` | Kill from cursor to start of line |
+| `Ctrl-Y` | Yank Text from buffer (paste) |
 | `Tab` | Insert 4 spaces |
 | `Ctrl-C` / `Ctrl-Q` | Quit |
 

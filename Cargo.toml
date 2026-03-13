@@ -11,3 +11,4 @@ pulldown-cmark = "0.12"
 notify = "7"
 clap = { version = "4", features = ["derive"] }
 unicode-width = "0.2"
+libc = "0.2"

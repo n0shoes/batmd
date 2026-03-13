@@ -11,6 +11,12 @@ use crate::watcher::FileWatcher;
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
 
+/// Action returned from key handling that requires terminal access.
+pub enum Action {
+    None,
+    Suspend,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     View,
@@ -92,7 +98,9 @@ impl App {
 
             if event::poll(Duration::from_millis(50))? {
                 if let Event::Key(key) = event::read()? {
-                    self.handle_key(key);
+                    if let Action::Suspend = self.handle_key(key) {
+                        Self::suspend(terminal)?;
+                    }
                 }
             }
         }
@@ -119,18 +127,21 @@ impl App {
         }
     }
 
-    fn handle_key(&mut self, key: KeyEvent) {
+    fn handle_key(&mut self, key: KeyEvent) -> Action {
         // Only handle key press/repeat events (ignore release for Kitty protocol terminals)
         if key.kind == KeyEventKind::Release {
-            return;
+            return Action::None;
         }
 
-        // Ctrl-C or Ctrl-Q always quits
+        // Ctrl-C or Ctrl-Q always quits, Ctrl-Z suspends
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Char('c') | KeyCode::Char('q') => {
                     self.should_quit = true;
-                    return;
+                    return Action::None;
+                }
+                KeyCode::Char('z') => {
+                    return Action::Suspend;
                 }
                 _ => {}
             }
@@ -142,6 +153,7 @@ impl App {
             Mode::Conflict => self.handle_conflict_key(key),
             Mode::Search => self.handle_search_key(key),
         }
+        Action::None
     }
 
     fn handle_view_key(&mut self, key: KeyEvent) {
@@ -397,6 +409,32 @@ impl App {
             total,
             self.search_query,
         ));
+    }
+
+    fn suspend(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> AppResult<()> {
+        // Restore terminal before suspending
+        crossterm::terminal::disable_raw_mode()?;
+        crossterm::execute!(
+            terminal.backend_mut(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::event::DisableMouseCapture,
+        )?;
+        terminal.show_cursor()?;
+
+        // Send SIGTSTP to ourselves
+        unsafe {
+            libc::raise(libc::SIGTSTP);
+        }
+
+        // When resumed (fg), re-setup terminal
+        crossterm::terminal::enable_raw_mode()?;
+        crossterm::execute!(
+            terminal.backend_mut(),
+            crossterm::terminal::EnterAlternateScreen,
+            crossterm::event::EnableMouseCapture,
+        )?;
+        terminal.clear()?;
+        Ok(())
     }
 
     pub fn clear_search(&mut self) {
